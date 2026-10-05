@@ -1,0 +1,21 @@
+{
+  "name": "borewell-drilling-backend",
+  "version": "1.0.0",
+  "description": "Borewell Daily Drilling Management Application Backend API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "migrate": "node -e \"const fs=require('fs');const db=require('./db');const sql=fs.readFileSync('./db/schema.sql','utf8')+fs.readFileSync('./db/seed.sql','utf8');db.query(sql).then(()=>{console.log('Migration & Seed complete!');process.exit(0);}).catch(e=>{console.error(e);process.exit(1);})\""
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "morgan": "^1.10.0",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
