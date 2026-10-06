@@ -41,7 +41,7 @@ export default function Navbar({
             <div className="hidden sm:flex flex-col text-right">
               <span className="text-xs font-bold text-slate-800">{user.name}</span>
               <span className="text-[11px] font-medium text-blue-600 uppercase tracking-wider">
-                {user.role} {user.assignedVehicleId ? `• ${user.assignedVehicleId}` : ''}
+                {user.role} {user.assigned_vehicle_id ? `• Rig #${user.assigned_vehicle_id}` : ''}
               </span>
             </div>
           )}

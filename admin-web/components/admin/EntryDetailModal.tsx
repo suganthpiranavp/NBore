@@ -170,7 +170,11 @@ export default function EntryDetailModal({ entry, onClose }: EntryDetailModalPro
                 </div>
                 <div className="p-2.5 flex justify-between items-center">
                   <span className="font-bold text-blue-900">Flushing:</span>
-                  <span className="text-slate-900">{entry.flushing || '-'}</span>
+                  <span className="text-slate-900">
+                    {typeof entry.flushing === 'object' && entry.flushing !== null
+                      ? `${entry.flushing.feet} ft`
+                      : (entry.flushing || '-')}
+                  </span>
                 </div>
                 <div className="p-2.5 flex justify-between items-center bg-blue-50/70">
                   <span className="font-bold text-blue-900">Avg:</span>

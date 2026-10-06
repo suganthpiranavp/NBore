@@ -4,7 +4,11 @@ import { VehicleModel } from '../../../models/Vehicle';
 export async function GET() {
   try {
     const list = await VehicleModel.getAllWithStats();
-    return NextResponse.json({ success: true, count: list.length, data: list });
+    return NextResponse.json({
+      success: true,
+      count: list.length,
+      data: list,
+    });
   } catch (error: any) {
     console.error('API /api/vehicles error:', error);
     return NextResponse.json(

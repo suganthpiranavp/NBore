@@ -1,143 +1,174 @@
+/**
+ * ==============================================================================
+ * Daily Entry Model (/models/DailyEntry.ts)
+ * Enterprise-grade logging model mapped to all 22 drilling sheet fields.
+ * ==============================================================================
+ */
+
 import { getDb } from '../lib/db';
+import { calculateFinancialSummary } from '../lib/calculations';
 
 export interface DailyEntryInterface {
   id: string;
-  vehicle_id: number;
-  vehicle_number?: string;
-  rig_name?: string;
-  manager_id: string;
-  manager_name?: string;
-  manager_phone?: string;
-  report_date: string;
-  submitted_at_formatted?: string;
-  
-  // Header Info
-  agent_name?: string;
-  sub?: string;
-  party_no?: string;
-  party_name: string;
-  village: string;
+  vehicleId: number;
+  vehicleNumber: string;
+  managerId: string;
+  managerName: string;
 
-  // Bore Details
+  // 22 Comprehensive Form Fields
+  agent: string;
+  subAgent: string;
+  date: string;
+  pNo: string;
+  pName: string;
+  placeVillage: string;
+  bRate: number;
   depth: number;
-  bore_rate: number;
-  rod_count: number;
+  rod: number;
+  msCasing: { feet: number; rate: number; total: number; isManualOverride: boolean };
+  welding: { count: number; ratePerUnit: number; total: number };
+  pvcCasing: { feet: number; rate: number; total: number };
+  recutting: { count: number; ratePerUnit: number; total: number };
+  rebore: { feet: number; rate: number; total: number };
+  flushing: { feet: number; rate: number; total: number };
+  rpmDetails: { sRpm: number; runRpm: number; cRpm: number; avgRpm: number };
+  bitDetails: { max: number; min: number; mm: number };
+  hammerDetails: { company: string; num: string; depth: number };
+  diesel: { liters: number; ratePerLiter: number; totalCost: number };
+  cashReceived: number;
+  drillerName: string;
+  boreRemarks: string;
 
-  // Casing & Operations
-  ms_casing: number;
-  welding_details?: string;
-  pvc_casing: number;
-  recut?: string;
-  rebore?: string;
-  flushing?: string;
-
-  // Machinery Stats
-  rpm_start: number;
-  rpm_end: number;
-  rpm_total: number;
-  avg_rpm: number;
-  bit_number?: string;
-  bit_size?: string;
-  hammer_type?: string;
-  driller_name?: string;
-
-  // Financials & Notes
-  diesel_liters: number;
-  cash_advance?: string;
-  remarks?: string;
-  created_at?: string;
+  // Auto-calculated summary fields
+  grossBoreCost: number;
+  balanceDue: number;
+  createdAt: string;
 }
 
 export class DailyEntryModel {
-  private static format(entry: any): DailyEntryInterface {
+  static async getAll(): Promise<DailyEntryInterface[]> {
     const db = getDb();
-    const vehicle = db.vehicles.find((v) => v.id === entry.vehicle_id);
-    const mgr = db.users.find((u) => u.id === entry.manager_id);
+    return [...db.entries].sort(
+      (a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime()
+    );
+  }
 
-    return {
-      ...entry,
-      vehicle_number: vehicle ? vehicle.vehicle_number : `Vehicle #${entry.vehicle_id}`,
-      rig_name: vehicle ? vehicle.rig_name : `Rig #${entry.vehicle_id}`,
-      manager_name: mgr ? mgr.name : 'Rig Manager',
-      manager_phone: mgr ? mgr.phone : '-',
-      submitted_at_formatted: entry.created_at
-        ? new Date(entry.created_at).toISOString().replace('T', ' ').substring(0, 19)
-        : new Date().toISOString().replace('T', ' ').substring(0, 19),
+  static async getByVehicle(vehicleId: number | string): Promise<DailyEntryInterface[]> {
+    const db = getDb();
+    const vid = Number(vehicleId);
+    return db.entries
+      .filter((e) => Number(e.vehicleId) === vid)
+      .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+  }
+
+  static async getByVehicleId(vehicleId: number | string): Promise<DailyEntryInterface[]> {
+    return this.getByVehicle(vehicleId);
+  }
+
+  static async create(data: any): Promise<DailyEntryInterface> {
+    const db = getDb();
+
+    // Reconcile calculations server-side for integrity
+    const msTotal = Number(data.msCasing?.total) || (Number(data.msCasing?.feet || 0) * Number(data.msCasing?.rate || 120));
+    const pvcTotal = Number(data.pvcCasing?.total) || (Number(data.pvcCasing?.feet || 0) * Number(data.pvcCasing?.rate || 0));
+    const weldingTotal = Number(data.welding?.total) || (Number(data.welding?.count || 0) * Number(data.welding?.ratePerUnit || 250));
+    const recuttingTotal = Number(data.recutting?.total) || (Number(data.recutting?.count || 0) * Number(data.recutting?.ratePerUnit || 140));
+    const reboreTotal = Number(data.rebore?.total) || (Number(data.rebore?.feet || 0) * Number(data.rebore?.rate || 0));
+    const flushingTotal = Number(data.flushing?.total) || (Number(data.flushing?.feet || 0) * Number(data.flushing?.rate || 40));
+
+    const fin = calculateFinancialSummary({
+      depth: Number(data.depth) || 0,
+      bRate: Number(data.bRate) || 120,
+      msCasingTotal: msTotal,
+      pvcCasingTotal: pvcTotal,
+      weldingTotal,
+      recuttingTotal,
+      reboreTotal,
+      flushingTotal,
+      cashReceived: Number(data.cashReceived) || 0,
+    });
+
+    const newEntry: DailyEntryInterface = {
+      id: `entry-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      vehicleId: Number(data.vehicleId),
+      vehicleNumber: data.vehicleNumber || `Rig #${data.vehicleId}`,
+      managerId: data.managerId,
+      managerName: data.managerName,
+
+      agent: data.agent || '',
+      subAgent: data.subAgent || '',
+      date: data.date || new Date().toISOString().split('T')[0],
+      pNo: data.pNo || '',
+      pName: data.pName || 'Direct Customer',
+      placeVillage: data.placeVillage || 'Site',
+      bRate: Number(data.bRate) || 120,
+      depth: Number(data.depth) || 0,
+      rod: Number(data.rod) || 25,
+
+      msCasing: {
+        feet: Number(data.msCasing?.feet) || 0,
+        rate: Number(data.msCasing?.rate) || 120,
+        total: msTotal,
+        isManualOverride: Boolean(data.msCasing?.isManualOverride),
+      },
+      welding: {
+        count: Number(data.welding?.count) || 0,
+        ratePerUnit: Number(data.welding?.ratePerUnit) || 250,
+        total: weldingTotal,
+      },
+      pvcCasing: {
+        feet: Number(data.pvcCasing?.feet) || 0,
+        rate: Number(data.pvcCasing?.rate) || 0,
+        total: pvcTotal,
+      },
+      recutting: {
+        count: Number(data.recutting?.count) || 0,
+        ratePerUnit: Number(data.recutting?.ratePerUnit) || 140,
+        total: recuttingTotal,
+      },
+      rebore: {
+        feet: Number(data.rebore?.feet) || 0,
+        rate: Number(data.rebore?.rate) || 0,
+        total: reboreTotal,
+      },
+      flushing: {
+        feet: Number(data.flushing?.feet) || 0,
+        rate: Number(data.flushing?.rate) || 40,
+        total: flushingTotal,
+      },
+      rpmDetails: {
+        sRpm: Number(data.rpmDetails?.sRpm) || 0,
+        runRpm: Number(data.rpmDetails?.runRpm) || 0,
+        cRpm: Number(data.rpmDetails?.cRpm) || 0,
+        avgRpm: Number(data.rpmDetails?.avgRpm) || 0,
+      },
+      bitDetails: {
+        max: Number(data.bitDetails?.max) || 0,
+        min: Number(data.bitDetails?.min) || 0,
+        mm: Number(data.bitDetails?.mm) || 0,
+      },
+      hammerDetails: {
+        company: data.hammerDetails?.company || '',
+        num: data.hammerDetails?.num || '',
+        depth: Number(data.hammerDetails?.depth) || 0,
+      },
+      diesel: {
+        liters: Number(data.diesel?.liters) || 0,
+        ratePerLiter: Number(data.diesel?.ratePerLiter) || 0,
+        totalCost: Number(data.diesel?.totalCost) || (Number(data.diesel?.liters || 0) * Number(data.diesel?.ratePerLiter || 0)),
+      },
+      cashReceived: Number(data.cashReceived) || 0,
+      drillerName: data.drillerName || '',
+      boreRemarks: data.boreRemarks || '',
+
+      grossBoreCost: fin.grossBoreCost,
+      balanceDue: fin.balanceDue,
+      createdAt: new Date().toISOString(),
     };
-  }
 
-  static async create(payload: Partial<DailyEntryInterface>) {
-    const db = getDb();
-    const start = parseFloat(String(payload.rpm_start)) || 0;
-    const end = parseFloat(String(payload.rpm_end)) || 0;
-    const total = parseFloat((end - start).toFixed(2));
-
-    const newDoc = {
-      id: 'entry-' + Date.now(),
-      vehicle_id: Number(payload.vehicle_id),
-      manager_id: payload.manager_id || 'mgr-1',
-      report_date: payload.report_date || new Date().toISOString().split('T')[0],
-      agent_name: payload.agent_name || '',
-      sub: payload.sub || '',
-      party_no: payload.party_no || '',
-      party_name: payload.party_name || '',
-      village: payload.village || '',
-      depth: parseFloat(String(payload.depth)) || 0,
-      bore_rate: parseFloat(String(payload.bore_rate)) || 0,
-      rod_count: parseInt(String(payload.rod_count), 10) || 0,
-      ms_casing: parseFloat(String(payload.ms_casing)) || 0,
-      welding_details: payload.welding_details || '-',
-      pvc_casing: parseFloat(String(payload.pvc_casing)) || 0,
-      recut: payload.recut || '-',
-      rebore: payload.rebore || '-',
-      flushing: payload.flushing || '-',
-      rpm_start: start,
-      rpm_end: end,
-      rpm_total: total,
-      avg_rpm: parseFloat(String(payload.avg_rpm)) || 0,
-      bit_number: payload.bit_number || '',
-      bit_size: payload.bit_size || '',
-      hammer_type: payload.hammer_type || '',
-      driller_name: payload.driller_name || '',
-      diesel_liters: parseFloat(String(payload.diesel_liters)) || 0,
-      cash_advance: payload.cash_advance || '',
-      remarks: payload.remarks || '',
-      created_at: new Date().toISOString(),
-    };
-
-    db.entries.unshift(newDoc);
-    return this.format(newDoc);
-  }
-
-  static async getByVehicleId(vId: number) {
-    const db = getDb();
-    const list = db.entries
-      .filter((e) => e.vehicle_id === Number(vId))
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    return list.map((e) => this.format(e));
-  }
-
-  static async getAll(filters: { vehicle_id?: string; date?: string; search?: string } = {}) {
-    const db = getDb();
-    let list = [...db.entries];
-
-    if (filters.vehicle_id && filters.vehicle_id !== 'ALL') {
-      list = list.filter((e) => e.vehicle_id === Number(filters.vehicle_id));
-    }
-    if (filters.date) {
-      list = list.filter((e) => e.report_date === filters.date);
-    }
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      list = list.filter(
-        (e) =>
-          e.party_name.toLowerCase().includes(q) ||
-          e.village.toLowerCase().includes(q) ||
-          e.driller_name?.toLowerCase().includes(q)
-      );
-    }
-
-    list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    return list.map((e) => this.format(e));
+    db.entries.unshift(newEntry);
+    return newEntry;
   }
 }
+
+export default DailyEntryModel;

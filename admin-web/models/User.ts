@@ -1,3 +1,12 @@
+/**
+ * ==============================================================================
+ * User Model (/models/User.ts)
+ * Enterprise RBAC for Nithya Borewells:
+ * - 6 Admins (Global oversight)
+ * - 4 Managers (Locked to designated bore vehicles)
+ * ==============================================================================
+ */
+
 import { getDb } from '../lib/db';
 
 export interface UserInterface {
@@ -7,7 +16,7 @@ export interface UserInterface {
   name: string;
   phone: string;
   email: string;
-  role: 'ADMIN' | 'MANAGER';
+  role: 'ADMIN' | 'MANAGER' | string;
   assigned_vehicle_id: number | null;
   is_active: boolean;
   vehicle_number?: string | null;
@@ -50,7 +59,7 @@ export class UserModel {
     };
   }
 
-  static async getAllManagers() {
+  static async getAllManagers(): Promise<UserInterface[]> {
     const db = getDb();
     return db.users
       .filter((u) => u.role === 'MANAGER')
@@ -58,60 +67,100 @@ export class UserModel {
         const vehicle = mgr.assigned_vehicle_id
           ? db.vehicles.find((v) => v.id === mgr.assigned_vehicle_id)
           : null;
-        const totalSubmissions = db.entries.filter((e) => e.manager_id === mgr.id).length;
-
         return {
-          id: mgr.id,
-          username: mgr.username,
-          name: mgr.name,
-          phone: mgr.phone,
-          email: mgr.email,
-          role: mgr.role,
-          assigned_vehicle_id: mgr.assigned_vehicle_id,
-          assigned_vehicle_number: vehicle ? vehicle.vehicle_number : 'Unassigned',
-          assigned_rig_name: vehicle ? vehicle.rig_name : 'No Rig Assigned',
-          total_submissions: totalSubmissions,
-          is_active: mgr.is_active,
+          ...mgr,
+          vehicle_number: vehicle ? vehicle.vehicle_number : 'Unassigned',
+          rig_name: vehicle ? vehicle.rig_name : 'No Rig Linked',
         };
       });
   }
 
-  static async createManager(data: {
-    name: string;
-    username: string;
-    phone?: string;
-    email?: string;
-    password?: string;
-    assigned_vehicle_id?: number | null;
-  }) {
+  static async getAllUsers(): Promise<UserInterface[]> {
     const db = getDb();
-    const clean = data.username.trim().toLowerCase();
-    if (db.users.some((u) => u.username.toLowerCase() === clean)) {
-      throw new Error(`Username '${data.username}' is already taken.`);
+    return db.users.map((u) => {
+      const vehicle = u.assigned_vehicle_id
+        ? db.vehicles.find((v) => v.id === u.assigned_vehicle_id)
+        : null;
+      return {
+        ...u,
+        vehicle_number: vehicle ? vehicle.vehicle_number : null,
+        rig_name: vehicle ? vehicle.rig_name : null,
+      };
+    });
+  }
+
+  static async createManager(data: {
+    username: string;
+    name: string;
+    phone: string;
+    email: string;
+    assigned_vehicle_id?: number | null;
+  }): Promise<UserInterface> {
+    const db = getDb();
+    const existing = db.users.find(
+      (u) => u.username.toLowerCase() === data.username.toLowerCase()
+    );
+    if (existing) {
+      throw new Error(`Username '${data.username}' is already in use`);
     }
 
-    const newMgr = {
-      id: 'mgr-' + Date.now(),
+    const newManager = {
+      id: `mgr-${Date.now()}`,
       username: data.username.trim(),
-      password: data.password || 'password123',
+      password: 'password123',
       name: data.name.trim(),
-      phone: data.phone?.trim() || '',
-      email: data.email?.trim() || `${clean}@borewell.com`,
+      phone: data.phone.trim(),
+      email: data.email.trim(),
       role: 'MANAGER' as const,
       assigned_vehicle_id: data.assigned_vehicle_id ? Number(data.assigned_vehicle_id) : null,
       is_active: true,
     };
 
-    db.users.push(newMgr);
-    return newMgr;
+    db.users.push(newManager);
+
+    const vehicle = newManager.assigned_vehicle_id
+      ? db.vehicles.find((v) => v.id === newManager.assigned_vehicle_id)
+      : null;
+
+    return {
+      ...newManager,
+      vehicle_number: vehicle ? vehicle.vehicle_number : null,
+      rig_name: vehicle ? vehicle.rig_name : null,
+    };
   }
 
-  static async assignVehicle(managerId: string, vehicleId: number | null) {
+  static async assignVehicle(
+    managerId: string,
+    vehicleId: number | null
+  ): Promise<UserInterface> {
     const db = getDb();
-    const mgr = db.users.find((u) => u.id === managerId);
-    if (!mgr) throw new Error('Manager not found');
+    const mgrIndex = db.users.findIndex((u) => u.id === managerId && u.role === 'MANAGER');
+    if (mgrIndex === -1) {
+      throw new Error('Manager not found');
+    }
 
-    mgr.assigned_vehicle_id = vehicleId ? Number(vehicleId) : null;
-    return mgr;
+    // If another manager had this vehicle, release it to preserve 1:1 lock
+    if (vehicleId) {
+      db.users.forEach((u) => {
+        if (u.id !== managerId && u.assigned_vehicle_id === Number(vehicleId)) {
+          u.assigned_vehicle_id = null;
+        }
+      });
+    }
+
+    db.users[mgrIndex].assigned_vehicle_id = vehicleId ? Number(vehicleId) : null;
+    const updated = db.users[mgrIndex];
+
+    const vehicle = updated.assigned_vehicle_id
+      ? db.vehicles.find((v) => v.id === updated.assigned_vehicle_id)
+      : null;
+
+    return {
+      ...updated,
+      vehicle_number: vehicle ? vehicle.vehicle_number : null,
+      rig_name: vehicle ? vehicle.rig_name : null,
+    };
   }
 }
+
+export default UserModel;

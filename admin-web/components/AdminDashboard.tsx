@@ -367,14 +367,14 @@ export default function AdminDashboard({ adminUser, onLogout }: AdminDashboardPr
               <tbody className="divide-y divide-slate-850 text-slate-300">
                 {loadingReports ? (
                   <tr>
-                    <td colSpan="10" className="py-12 text-center text-slate-400">
+                    <td colSpan={10} className="py-12 text-center text-slate-400">
                       <div className="inline-block animate-spin text-2xl mb-2">⚙️</div>
                       <p className="text-xs font-medium">Fetching time-stamped logs for {activeVehicle?.vehicle_number}...</p>
                     </td>
                   </tr>
                 ) : reports.length === 0 ? (
                   <tr>
-                    <td colSpan="10" className="py-12 text-center text-slate-400">
+                    <td colSpan={10} className="py-12 text-center text-slate-400">
                       <div className="text-3xl mb-2">📄</div>
                       <p className="font-semibold text-slate-300">No reports submitted yet for {activeVehicle?.vehicle_number}</p>
                       <p className="text-xs mt-1 text-slate-500">
