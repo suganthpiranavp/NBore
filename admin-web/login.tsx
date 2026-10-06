@@ -1,4 +1,4 @@
 'use client';
 
-import AdminLogin from './components/AdminLogin';
-export default AdminLogin;
+import LoginPage from './components/auth/LoginPage';
+export default LoginPage;

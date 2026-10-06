@@ -9,9 +9,11 @@
     "migrate": "node -e \"const fs=require('fs');const db=require('./db');const sql=fs.readFileSync('./db/schema.sql','utf8')+fs.readFileSync('./db/seed.sql','utf8');db.query(sql).then(()=>{console.log('Migration & Seed complete!');process.exit(0);}).catch(e=>{console.error(e);process.exit(1);})\""
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.0",
     "pg": "^8.11.5"
   },

@@ -1,22 +1,23 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import AdminLogin from '../components/AdminLogin';
-import AdminDashboard from '../components/AdminDashboard';
+import LoginPage from '../components/auth/LoginPage';
+import AdminDashboard from '../components/admin/AdminDashboard';
+import ManagerDashboard from '../components/manager/ManagerDashboard';
 
 export default function Page() {
-  const [adminUser, setAdminUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
     // Check local storage for persistent session
     if (typeof window !== 'undefined') {
-      const savedUser = localStorage.getItem('borewell_admin_user');
+      const savedUser = localStorage.getItem('borewell_user');
       if (savedUser) {
         try {
-          setAdminUser(JSON.parse(savedUser));
+          setCurrentUser(JSON.parse(savedUser));
         } catch (e) {
-          localStorage.removeItem('borewell_admin_user');
+          localStorage.removeItem('borewell_user');
         }
       }
       setIsInitializing(false);
@@ -24,15 +25,15 @@ export default function Page() {
   }, []);
 
   const handleLoginSuccess = (user) => {
-    setAdminUser(user);
+    setCurrentUser(user);
   };
 
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('borewell_admin_user');
-      localStorage.removeItem('borewell_admin_token');
+      localStorage.removeItem('borewell_user');
+      localStorage.removeItem('borewell_token');
     }
-    setAdminUser(null);
+    setCurrentUser(null);
   };
 
   if (isInitializing) {
@@ -46,9 +47,16 @@ export default function Page() {
     );
   }
 
-  if (!adminUser) {
-    return <AdminLogin onLoginSuccess={handleLoginSuccess} />;
+  // Not logged in -> Show Unified Role-Based Login
+  if (!currentUser) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
-  return <AdminDashboard adminUser={adminUser} onLogout={handleLogout} />;
+  // Role: ADMIN -> Show Admin Dashboard
+  if (currentUser.role === 'ADMIN') {
+    return <AdminDashboard adminUser={currentUser} onLogout={handleLogout} />;
+  }
+
+  // Role: MANAGER -> Show Manager Dashboard
+  return <ManagerDashboard managerUser={currentUser} onLogout={handleLogout} />;
 }
